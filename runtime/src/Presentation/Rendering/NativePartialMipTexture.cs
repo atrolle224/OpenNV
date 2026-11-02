@@ -20,23 +20,29 @@ internal sealed partial class NativePartialMipTexture : Texture2Drd
             {
                 result._device = RenderingServer.GetRenderingDevice() ??
                     throw new NotSupportedException("Authored partial mip textures require the Forward+ or Mobile renderer.");
+                var usage = RenderingDevice.TextureUsageBits.SamplingBit | RenderingDevice.TextureUsageBits.CanCopyFromBit;
+                var blockFormat = chain.Format switch
+                {
+                    "BC1" => RenderingDevice.DataFormat.Bc1RgbaUnormBlock,
+                    "BC2" => RenderingDevice.DataFormat.Bc2UnormBlock,
+                    "BC3" => RenderingDevice.DataFormat.Bc3UnormBlock,
+                    _ => throw new NotSupportedException("Unknown authored block compression format."),
+                };
+                // Mobile GPUs (Mali, Adreno) have no BC sampling: the same authored
+                // levels are expanded to RGBA8 on the CPU instead.
+                var expand = !result._device.TextureIsFormatSupportedForUsage(blockFormat, usage);
                 using var format = new RDTextureFormat
                 {
                     Width = (uint)chain.Levels[0].Width,
                     Height = (uint)chain.Levels[0].Height,
                     Mipmaps = (uint)chain.Levels.Count,
                     TextureType = RenderingDevice.TextureType.Type2D,
-                    Format = chain.Format switch
-                    {
-                        "BC1" => RenderingDevice.DataFormat.Bc1RgbaUnormBlock,
-                        "BC2" => RenderingDevice.DataFormat.Bc2UnormBlock,
-                        "BC3" => RenderingDevice.DataFormat.Bc3UnormBlock,
-                        _ => throw new NotSupportedException("Unknown authored block compression format."),
-                    },
-                    UsageBits = RenderingDevice.TextureUsageBits.SamplingBit | RenderingDevice.TextureUsageBits.CanCopyFromBit,
+                    Format = expand ? RenderingDevice.DataFormat.R8G8B8A8Unorm : blockFormat,
+                    UsageBits = usage,
                 };
                 using var view = new RDTextureView();
-                result._ownedImage = result._device.TextureCreate(format, view, [bytes[128..]]);
+                var data = expand ? ExpandLevels(bytes, chain) : bytes[128..];
+                result._ownedImage = result._device.TextureCreate(format, view, [data]);
                 if (!result._ownedImage.IsValid) throw new InvalidDataException("The renderer rejected the authored partial mip texture.");
                 result.TextureRdRid = result._ownedImage;
             }
@@ -48,6 +54,26 @@ internal sealed partial class NativePartialMipTexture : Texture2Drd
         result.SetMeta("opennv_dds_source_format", chain.Format);
         result.SetMeta("opennv_dds_authored_levels", chain.Levels.Count);
         return result;
+    }
+
+    private static byte[] ExpandLevels(byte[] bytes, FalloutDdsMipChain chain)
+    {
+        var imageFormat = chain.Format switch
+        {
+            "BC1" => Image.Format.Dxt1,
+            "BC2" => Image.Format.Dxt3,
+            _ => Image.Format.Dxt5,
+        };
+        using var output = new MemoryStream();
+        foreach (var level in chain.Levels)
+        {
+            using var image = Image.CreateFromData(level.Width, level.Height, false, imageFormat,
+                bytes.AsSpan(level.Offset, level.Bytes).ToArray());
+            if (image.Decompress() != Error.Ok || image.GetFormat() != Image.Format.Rgba8)
+                throw new InvalidDataException("Authored partial mip expansion failed.");
+            output.Write(image.GetData());
+        }
+        return output.ToArray();
     }
 
     public override void _Notification(int what)

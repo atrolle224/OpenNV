@@ -399,6 +399,19 @@ internal sealed class GodotLauncherProfileStore
         };
 
         var commonPrefixes = new List<string>();
+        if (OperatingSystem.IsAndroid())
+        {
+            foreach (var storage in AndroidStorageRoots())
+            {
+                commonPrefixes.Add(storage);
+                commonPrefixes.Add(Path.Combine(storage, "Games"));
+                commonPrefixes.Add(Path.Combine(storage, "Documents"));
+                commonPrefixes.Add(Path.Combine(storage, "Download"));
+                commonPrefixes.Add(Path.Combine(storage, "OpenNV"));
+                commonPrefixes.Add(Path.Combine(storage, "Games", "ROM"));
+            }
+            gameSubdirs = [.. gameSubdirs, .. gameSubdirs.Select(name => name + " Android"), "FalloutNV", "Fallout3"];
+        }
         try
         {
             foreach (var drive in DriveInfo.GetDrives())
@@ -425,6 +438,21 @@ internal sealed class GodotLauncherProfileStore
             {
                 candidates.Add(Path.Combine(prefix, subdir));
             }
+        }
+    }
+
+    /// <summary>Internal storage first, then each card Android mounts under /storage.</summary>
+    internal static IEnumerable<string> AndroidStorageRoots()
+    {
+        yield return "/storage/emulated/0";
+        string[] cards;
+        try { cards = Directory.GetDirectories("/storage"); }
+        catch { yield break; }
+        foreach (var card in cards)
+        {
+            var name = Path.GetFileName(card);
+            if (name is "emulated" or "self") continue;
+            yield return card;
         }
     }
 

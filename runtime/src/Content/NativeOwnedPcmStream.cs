@@ -108,7 +108,8 @@ internal sealed class NativeOwnedPcmStream : IDisposable
     {
         if (_create is not null) return;
         if (!ClassDB.ClassExists("OpenNVPcmStream")) throw new InvalidOperationException("The native audio extension is not loaded.");
-        var candidates = new[] { Path.Combine(Path.GetDirectoryName(OS.GetExecutablePath())!, "opennv_audio.dll"),
+        var candidates = OperatingSystem.IsAndroid() ? new[] { "libopennv_audio.so" } :
+            new[] { Path.Combine(Path.GetDirectoryName(OS.GetExecutablePath())!, "opennv_audio.dll"),
             ProjectSettings.GlobalizePath("res://generated/native/opennv_audio.dll") };
         nint library = 0;
         foreach (var path in candidates) if (NativeLibrary.TryLoad(path, out library)) break;

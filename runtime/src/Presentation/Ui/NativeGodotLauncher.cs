@@ -130,16 +130,25 @@ internal sealed partial class NativeGodotLauncher : Control
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         ProcessMode = ProcessModeEnum.Always;
         Input.MouseMode = Input.MouseModeEnum.Visible;
-        GetWindow().MinSize = new Vector2I(1060, 700);
+        if (!OS.HasFeature("android"))
+            GetWindow().MinSize = new Vector2I(1060, 700);
 
         BuildBackground();
         BuildInterface();
         Refresh();
         ReportLauncherReady();
+        ReadyAndroid();
     }
+
+    public override void _Notification(int what) => NotificationAndroid(what);
 
     public override void _UnhandledInput(InputEvent inputEvent)
     {
+        if (HandleJoypad(inputEvent))
+        {
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         if (inputEvent is not InputEventKey { Pressed: true, Echo: false } key)
             return;
         if (key.PhysicalKeycode == Key.Escape)
@@ -215,6 +224,8 @@ internal sealed partial class NativeGodotLauncher : Control
                 dependency ? "Choose an extracted dependency or patch folder" :
                 $"Choose your {CurrentCampaign().Title} folder",
         };
+        if (AndroidFolderPickerStart() is { } start)
+            _fileDialog.CurrentDir = start;
         _fileDialog.DirSelected += OnDirectorySelected;
         _fileDialog.Canceled += CloseFileDialog;
         AddChild(_fileDialog);
