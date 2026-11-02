@@ -6,5 +6,7 @@ reloadable = false
 [libraries]
 windows.debug.x86_64 = "res://generated/native/opennv_audio.dll"
 windows.release.x86_64 = "res://generated/native/opennv_audio.dll"
+linux.debug.x86_64 = "res://generated/native/libopennv_audio.linux.so"
+linux.release.x86_64 = "res://generated/native/libopennv_audio.linux.so"
 android.debug.arm64 = "res://generated/native/libopennv_audio.so"
 android.release.arm64 = "res://generated/native/libopennv_audio.so"
